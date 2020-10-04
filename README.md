@@ -29,7 +29,7 @@ from newsCrawler import NewsCrawler
 Crawler = NewsCrawler()  
 # param: 카테고리, 시작연도, 시작월, 끝연도, 끝월, 프로세스 개수, 수집 스레드 개수
 ret = Crawler.getTitles('정치', 2020, 5, 2020, 6, 4, 10)
-
+```
 ## Multi Process 안내
   크롤링 작업은 크게 두 가지 단계로 나누어집니다.
   첫 번째는 네트워크를 이용한 html 페이지 수집 단계,
