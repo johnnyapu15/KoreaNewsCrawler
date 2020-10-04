@@ -1,6 +1,4 @@
-from newsCrawler import NewsCrawler
-from bs4 import BeautifulSoup
-import re
+from Naver_Articrawler.newsCrawler import NewsCrawler
 
 Crawler = NewsCrawler()
 

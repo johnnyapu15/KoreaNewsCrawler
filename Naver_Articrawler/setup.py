@@ -1,3 +1,6 @@
+from setuptools import setup, find_packages
+
+
 setup(
     # 배포할 패키지의 이름을 적어줍니다. setup.py파일을 가지는 폴더 이름과 동일하게 합니다.
     name                = 'naver_articrawler',
