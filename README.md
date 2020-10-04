@@ -3,6 +3,8 @@
 
 ## Forked from lumyjuwon/KoreaNewsCrawler
   lumyjuwon님의 KoreaNewsCrawler를 참고하여 멀티쓰레드/프로세스를 더 활용할 수 있는 크롤러를 만들었습니다. 
+  
+  네이버 기사 형태가 변형되어, 좀 더 효율적으로 크롤링할 수 있도록 html parser를 수정했습니다.
 
 ## Method
   
