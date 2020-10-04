@@ -1,126 +1,53 @@
 # KoreaNewsCrawler
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-이 크롤러는 네이버 포털에 올라오는 언론사 뉴스 기사들을 크롤링 해주는 크롤러입니다.  
-크롤링 가능한 기사 카테고리는 정치, 경제, 생활문화, IT과학, 사회, 세계, 오피니언입니다.  
-스포츠 기사같은 경우 야구, 축구, 농구, 배구, 골프, 일반 스포츠, e스포츠입니다.  
+## Forked from lumyjuwon/KoreaNewsCrawler
+  lumyjuwon님의 KoreaNewsCrawler를 참고하여 멀티쓰레드/프로세스를 더 활용할 수 있는 크롤러를 만들었습니다. 
 
-**스포츠 기사는 현재 html 형식이 바껴 사용이 불가능 한 상태입니다. 빠른 시일내로 업데이트 하겠습니다.**  
-  
-**스포츠 관련 기사 크롤링 도움을 주실 수 있으신 분을 찾습니다 깃허브에 issue 또는 lumyjuwon@gmail.com로 이메일 주시면 감사하겠습니다**  
-## User Python Installation
-  * **KoreaNewsCrawler**
-
-    ``` pip install KoreaNewsCrawler ```
 ## Method
-
-* **set_category(category_name)**
   
- 이 메서드는 수집하려고자 하는 카테고리는 설정하는 메서드입니다.  
- 파라미터에 들어갈 수 있는 카테고리는 '정치', '경제', '사회', '생활문화', 'IT과학', '세계', '오피니언'입니다.  
- 파라미터는 여러 개 들어갈 수 있습니다.  
- category_name: 정치, 경제, 사회, 생활문화, IT과학, 세계, 오피니언 or politics, economy, society, living_culture, IT_science, world, opinion
+* **getTitles(category, startyear, startmonth, endyear, endmonth, process_size, getter_threads)**
   
-* **set_date_range(startyear, startmonth, endyear, endmonth)**
-  
- 이 메서드는 수집하려고자 하는 뉴스의 기간을 의미합니다. 기본적으로 startmonth월부터 endmonth월까지 데이터를 수집합니다.
-  
-* **start()**
-  
- 이 메서드는 크롤링 실행 메서드입니다.
+ 이 메서드는 기사의 제목을 크롤링하는 메서드입니다.
+ 리턴값은 다음 형태의 정보를 배열로 지닙니다.
+'''
+{
+  'date': '2020.05.28. 오전 11:21', 
+  'writing': '데일리안', 
+  'url': 'http://news.naver.com/main/list.nhn?mode=LSD&mid=sec&listType=title&sid1=100&date=20200528&page=43', 
+  'title': '<포토> 원내대책회의 주재하는 김태년', 
+  'href': 'https://news.naver.com/main/read.nhn?mode=LSD&mid=sec&sid1=100&oid=119&aid=0002404281'
+}
+'''
   
 ## Example
 ```
-from korea_news_crawler.articlecrawler import ArticleCrawler
+from newsCrawler import NewsCrawler
 
-Crawler = ArticleCrawler()  
-Crawler.set_category("정치", "IT과학", "economy")  
-Crawler.set_date_range(2017, 1, 2018, 4)  
-Crawler.start()
-```
-  2017년 1월 ~ 2018년 4월까지 정치, IT과학, 경제 카테고리 뉴스를 멀티프로세서를 이용하여 병렬 크롤링을 진행합니다.
-  
+Crawler = NewsCrawler()  
+# param: 카테고리, 시작연도, 시작월, 끝연도, 끝월, 프로세스 개수, 수집 스레드 개수
+ret = Crawler.getTitles('정치', 2020, 5, 2020, 6, 4, 10)
+
 ## Multi Process 안내
-  intel i5 9600 cpu로 테스트 해본 결과 1개의 카테고리 당 평균 **8%** 의 cpu 점유율을 보였습니다.  
-  크롤러를 실행하는 컴퓨터 사양에 맞게 카테고리 개수를 맞추시거나 반복문을 이용하시기 바랍니다.
+  크롤링 작업은 크게 두 가지 단계로 나누어집니다.
+  첫 번째는 네트워크를 이용한 html 페이지 수집 단계,
+  두 번째는 수집된 페이지를 데이터로 가공하는 가공 단계입니다.
+  이에 멀티프로세서를 적절히 활용하기 위해 다음 구조로 변경하였습니다.
   
-  ![ex_screenshot](./img/multi_process.PNG)
+  * 메인 프로세스는 n개의 수집 프로세스를 생성합니다.
+  * 각 수집 프로세스는 다시 m개 만큼의 네트워크 수집 스레드를 이용해 병렬 수집합니다.
+  * 수집이 완료되면 가공 프로세스를 생성하여 가공합니다.
   
-## Results
- ![ex_screenshot](./img/article_result.PNG)
- ![ex_screenshot](./img/sport_resultimg.PNG)
- 
- Colum A: 기사 날짜  
- Colum B: 기사 카테고리  
- Colum C: 언론사  
- Colum D: 기사 제목  
- Colum E: 기사 본문  
- Colum F: 기사 주소  
- 
- 수집한 모든 데이터는 csv 확장자로 저장됩니다.  
+  n은 프로세스의 개수입니다. 가공 프로세스의 개수와 동일하며, 각 프로세스는
+  입력 범위(수집할 범위)를 n만큼 나누어 작업합니다.
+  
+  m은 프로세스 내 수집 스레드의 개수입니다.
+  크롤링시에는 연속된 네트워크 환경이 아니라, 지속적으로 다른 url에 접근하기 때문에
+  네트워크 속도보다 컴퓨팅 속도에 의존할 수 있습니다. 때문에 멀티 스레드를 이용합니다.
 
 
-# KoreaNewsCrawler (English version)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-
-This crawler crawles news from portal Naver  
-Crawlable article categories include politics, economy, lifeculture, global, IT/science, society.  
-In the case of sports articles, that include Baseball, soccer, basketball, volleyball, golf, general sports, e-sports.  
-
-**In the case of sports articles, you can't use sport article crawler because html form is changed. I will update sport article crawler 
-as soon as possible.**
-
-## User Python Installation
-  * **KoreaNewsCrawler**
-
-    ``` pip install KoreaNewsCrawler ```
-    
-## Method
-
-* **set_category(category_name)**
- 
- This method is setting categories that you want to crawl.  
- Categories that can be entered into parameters are politics, economy, society, living_culture, IT_science. 
- Multiple parameters can be entered.
   
-* **set_date_range(startyear, startmonth, endyear, endmonth)**
   
- This method represents the duration of the news you want to collect.  
- Data is collected from startmonth to endmonth.
-  
-* **start()**
- 
- This method is the crawl execution method.
-  
-## Example
-```
-from korea_news_crawler.articlecrawler import ArticleCrawler
-
-Crawler = ArticleCrawler()  
-Crawler.set_category("politics", "IT_science", "economy")  
-Crawler.set_date_range(2017, 1, 2018, 4)  
-Crawler.start()
-```
- From January 2017 to April 2018, Parallel crawls will be conducted using multiprocessors for political, IT science, world, and economic category news.
-  
-## Multi Process Information
-Testing with intel i5 9600 cpu showed an average ** 8% ** cpu share per category.  
-Please adjust the number of categories to match the specifications of the computer running the crawler, or use a loop.
-  
-  ![ex_screenshot](./img/multi_process.PNG)
-  
-## Results
- ![ex_screenshot](./img/article_result.PNG)
- ![ex_screenshot](./img/sport_resultimg.PNG)
- 
- Colum A: Article Date  
- Colum B: Article Category  
- Colum C: Article Press  
- Colum D: Article headline  
- Colum E: Article Content  
- Colum F: Article URL  
- 
- All collected data is saved as a csv.
  
 ## License
  Apache License 2.0
