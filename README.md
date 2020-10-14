@@ -8,7 +8,7 @@
 
 ## Method
   
-* **getTitles(category, startyear, startmonth, endyear, endmonth, process_size, getter_threads)**
+* **getTitles(category, startyear, startmonth, startday = -1, process_size, getter_threads)**
   
  이 메서드는 기사의 제목을 크롤링하는 메서드입니다.
  리턴값은 다음 형태의 정보를 배열로 지닙니다.
@@ -29,8 +29,8 @@
 from newsCrawler import NewsCrawler
 
 Crawler = NewsCrawler()  
-# param: 카테고리, 시작연도, 시작월, 끝연도, 끝월, 프로세스 개수, 수집 스레드 개수
-ret = Crawler.getTitles('정치', 2020, 5, 2020, 6, 4, 10)
+# param: 카테고리, 시작연도, 시작월, 프로세스 개수, 수집 스레드 개수
+ret = Crawler.getTitles('정치', 2020, 5, 4, 10)
 ```
 ## Multi Process 안내
   크롤링 작업은 크게 두 가지 단계로 나누어집니다.

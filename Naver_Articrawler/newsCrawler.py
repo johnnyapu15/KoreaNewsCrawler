@@ -6,11 +6,14 @@ from bs4 import BeautifulSoup
 from threading import Thread, current_thread
 from multiprocessing import Process, Queue, Pool
 from copy import deepcopy
+import aiohttp
+import asyncio
 import os
 import platform
 import calendar
 import requests
 import re
+from datetime import datetime
 
 
 class NewsCrawler(object):
@@ -52,10 +55,32 @@ class NewsCrawler(object):
             ret.extend(tmpQ.get())
         q.put(ret)
         del ths, tmpQ, num
-        
+    def gettingsAsync(self, urls):
+        ret = self.gettingAsync(urls)
+        return ret
+
+    async def getAsync(self, url, ret):
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as resp:
+                tmp = await resp.read()
+                ret.append({
+                    'url':url,
+                    'data':tmp
+                })
+
+    def gettingAsync(self, urls):
+        ret = []
+        tasks = [self.getAsync(url, ret) for url in urls]
+        try:
+            asyncio.run(asyncio.wait(tasks))
+        except ValueError:
+            pass
+        return ret
+
     def getting(self, urls, q):
         ret = []
         for url in urls:
+            aiohttp.request('GET', url)
             d = requests.get(url, headers=self.needs).content
             ret.append({
                 'url':url,
@@ -70,24 +95,31 @@ class NewsCrawler(object):
         data = q.get()
         q.put(func(data))
 
-    def getTitles(self, cat, stY, stM, enY, enM, process_size = 2, getter_threads = 5):
-        catNum = self.categories[cat]
-        dateUrls = self.getDateUrls(catNum, stY, stM, enY, enM)
+    def getTitles(self, cat, stY, stM, stD = -1, process_size = 2, getter_threads = 5):
+        catNum = 0
+        if type(cat) == str:
+            catNum = self.categories[cat]
+        elif type(cat) == int:
+            catNum = cat
+        dateUrls = self.getDateUrls(catNum, stY, stM, stD)
         urls = self.startQ(dateUrls, self.findPageUrls, process_size, getter_threads)
         ret = self.startQ(urls, self.crawlTitles, process_size, getter_threads)
         return ret
 
-    def tmpJob(self, urls, analFunc, dataQ, getter_threads):
+    def tmpJob(self, urls, analFunc, dataQ, getter_threads = 1, asyn = True):
         #print(analFunc.__name__ + ' MANAGER START ' + str(current_thread()) + ': urls: ' + str(len(urls)))
         gettingTime = time()
-        tmpQ = Queue()
-        proc = Process(target = self.gettings, args = (urls, tmpQ, getter_threads))
-        proc.start()
-        while(tmpQ.qsize() == 0):
-            sleep(1)
-        ret = tmpQ.get()
-        gettingTime = time() - gettingTime
         
+        if not asyn:
+            tmpQ = Queue()
+            proc = Process(target = self.gettings, args = (urls, tmpQ, getter_threads))
+            proc.start()
+            while(tmpQ.qsize() == 0):
+                sleep(1)
+            ret = tmpQ.get()
+            gettingTime = time() - gettingTime
+        elif asyn:
+            ret = self.gettingsAsync(urls)
         proc = Process(target=analFunc, args=(ret, dataQ))
         proc.start()
         analTime = time()
@@ -102,7 +134,7 @@ class NewsCrawler(object):
         print('Starting\t' + analyzer.__name__ + '\tprocess size: ' + str(process_size) + ' / thread size: ' + str(getter_threads))
         dataQ = Queue()
         st = time()
-        num = int(len(urls)/process_size)
+        num = int(len(urls)/process_size + 1)
         ths = []
         self.initStat('get')
         self.initStat('analyze')
@@ -124,7 +156,7 @@ class NewsCrawler(object):
 
     @staticmethod
     def crawlTitles(requests, dataQ):
-        post = []
+        posts = []
         for request in requests:
             cnts = request['data']
             url = request['url']
@@ -132,23 +164,41 @@ class NewsCrawler(object):
             post_temp = document.select('.list_body li')
             for line in post_temp:
                 line_a = line.select('a')[0]
-                line_writing = line.select('.writing')[0].text
-                line_date = line.select('.date')[0].text
                 txt = line_a.text
                 if txt != '':
-                    post.append( {
-                        'date':line_date,
+                    line_writing = line.select('.writing')[0].text
+                    tmpDate = line.select('.date')[0].text
+                    tmpDate = tmpDate.split(' ') # '2222.22.22. 오후 1:11
+                    YMD = tmpDate[0].split('.') # ['2222','22','22','']
+                    tmpYear = int(YMD[0])
+                    tmpMonth = int(YMD[1])
+                    tmpDay = int(YMD[2])
+                    HM = tmpDate[2].split(':')
+                    tmpHour = int(HM[0])
+                    if tmpDate[1] == '오후':
+                        tmpHour += 12
+                    if tmpHour == 24:
+                        tmpHour = 0
+                    tmpMinute = int(HM[1])
+                    line_date = datetime(
+                        tmpYear, tmpMonth, tmpDay,
+                        tmpHour, tmpMinute
+                    )
+                    posts.append( {
+                        'date':line_date.isoformat(),
                         'writing':line_writing,
                         'url':url,
                         'title':txt,
-                        'href':line_a.get('href')
+                        'href':line_a.get('href'),
+                        'crawled': datetime.now().isoformat()
                     })
             del post_temp
-        dataQ.put(post)
-        return post
+        dataQ.put(posts)
+        return posts
     @staticmethod
     def findPageUrls(requests, dataQ):
         made_urls = []
+        print(requests)
         for request in requests:
             cnts = request['data']
             url = request['url']
@@ -164,8 +214,10 @@ class NewsCrawler(object):
         return made_urls
         
     @staticmethod
-    def getDateUrls(category_num, start_year, start_month, end_year, end_month):
+    def getDateUrls(category_num, start_year, start_month, start_day = -1):
         made_urls = []
+        end_year = start_year
+        end_month = start_month
         category_url = "http://news.naver.com/main/list.nhn?mode=LSD&mid=sec&listType=title&sid1=" + str(category_num) + "&date="
         for year in range(start_year, end_year + 1):
             if start_year == end_year:
@@ -182,7 +234,12 @@ class NewsCrawler(object):
                     year_startmonth = 1
                     year_endmonth = 12
             for month in range(year_startmonth, year_endmonth + 1):
-                for month_day in range(1, calendar.monthrange(year, month)[1] + 1):
+                if start_day == -1:
+                    start_day = 1
+                    end_day = calendar.monthrange(year, month)[1] + 1
+                else:
+                    end_day = start_day + 1
+                for month_day in range(start_day, end_day):
                     if len(str(month)) == 1:
                         month = "0" + str(month)
                     if len(str(month_day)) == 1:
