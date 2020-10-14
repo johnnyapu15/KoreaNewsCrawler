@@ -198,7 +198,6 @@ class NewsCrawler(object):
     @staticmethod
     def findPageUrls(requests, dataQ):
         made_urls = []
-        print(requests)
         for request in requests:
             cnts = request['data']
             url = request['url']
